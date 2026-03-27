@@ -1,0 +1,99 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  clerkUserId   String    @unique
+  email         String    @unique
+  name          String?
+  imageUrl      String?
+
+  // ✅ FIX: simple field (NO foreign key)
+  industry      String?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Profile fields
+  bio           String?
+  experience    Int?
+
+  // Relations
+  skills        String[]  @default([])   // ✅ FIX: default added
+  assessments   Assessment[]
+  resume        Resume?
+  coverLetter   CoverLetter[]
+}
+
+model Assessment {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  quizScore      Float
+  questions      Json[]
+  category       String
+  improvementTip String?
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+model Resume {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  content     String    @db.Text
+  atsScore    Float?
+  feedback    String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model CoverLetter {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  content         String
+  jobDescription  String?
+  companyName     String
+  jobTitle        String
+  status          String    @default("draft")
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+// (Optional - future use)
+model IndustryInsight {
+  id                  String    @id @default(cuid())
+  industry            String    @unique
+
+  salaryRanges        Json[]
+  growthRate          Float
+  demandLevel         String
+  topSkills           String[]
+
+  marketOutlook       String
+  keyTrends           String[]
+
+  recommendedSkills   String[]
+
+  lastUpdated         DateTime  @default(now())
+  nextUpdate          DateTime
+
+  @@index([industry])
+}
