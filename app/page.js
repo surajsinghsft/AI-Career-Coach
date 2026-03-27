@@ -33,7 +33,7 @@ export default function LandingPage() {
       {/* 💎 Premium Features */}
       <FeaturesSection />
 
-      {/* 📊 Stats Section (UPGRADED) */}
+      {/* 📊 Stats Section */}
       <section className="w-full py-20 bg-muted/30">
         <div className="container mx-auto px-4 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
           {[
@@ -110,8 +110,10 @@ export default function LandingPage() {
                       </p>
                     </div>
                   </div>
+
+                  {/* ✅ FIXED LINE */}
                   <p className="text-sm italic text-muted-foreground">
-                    "{item.quote}"
+                    {`"${item.quote}"`}
                   </p>
                 </CardContent>
               </Card>
