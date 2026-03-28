@@ -1,4 +1,3 @@
-export const dynamic = "force-dynamic";
 import { getResume } from "@/actions/resume";
 import ResumeBuilder from "./_components/resume-builder";
 

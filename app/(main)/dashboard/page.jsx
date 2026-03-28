@@ -1,4 +1,3 @@
-export const dynamic = "force-dynamic";
 import { getIndustryInsights } from "@/actions/dashboard";
 import DashboardView from "./_component/dashboard-view";
 import { getUserOnboardingStatus } from "@/actions/user";

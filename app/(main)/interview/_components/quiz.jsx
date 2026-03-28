@@ -14,7 +14,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { generateQuiz, saveQuizResult } from "@/actions/interview";
 import QuizResult from "./quiz-result";
-import useFetch from "@/hooks/use-fetch";
 import { BarLoader } from "react-spinners";
 
 export default function Quiz() {
@@ -22,21 +21,29 @@ export default function Quiz() {
   const [answers, setAnswers] = useState([]);
   const [showExplanation, setShowExplanation] = useState(false);
 
-  const {
-    loading: generatingQuiz,
-    fn: generateQuizFn,
-    data: quizData,
-  } = useFetch(generateQuiz);
+  const [quizData, setQuizData] = useState(null);
+  const [generatingQuiz, setGeneratingQuiz] = useState(false);
 
-  const {
-    loading: savingResult,
-    fn: saveQuizResultFn,
-    data: resultData,
-    setData: setResultData,
-  } = useFetch(saveQuizResult);
+  const [savingResult, setSavingResult] = useState(false);
+  const [resultData, setResultData] = useState(null);
+
+  const toPlain = (data) => JSON.parse(JSON.stringify(data));
+
+  // ✅ Generate Quiz
+  const generateQuizFn = async () => {
+    try {
+      setGeneratingQuiz(true);
+      const data = await generateQuiz();
+      setQuizData(toPlain(data));
+    } catch (error) {
+      toast.error("Failed to generate quiz");
+    } finally {
+      setGeneratingQuiz(false);
+    }
+  };
 
   useEffect(() => {
-    if (quizData) {
+    if (Array.isArray(quizData)) {
       setAnswers(new Array(quizData.length).fill(null));
     }
   }, [quizData]);
@@ -66,13 +73,25 @@ export default function Quiz() {
     return (correct / quizData.length) * 100;
   };
 
+  // ✅ Save Result
   const finishQuiz = async () => {
-    const score = calculateScore();
     try {
-      await saveQuizResultFn(quizData, answers, score);
+      setSavingResult(true);
+
+      const score = calculateScore();
+
+      const res = await saveQuizResult(
+        toPlain(quizData),
+        toPlain(answers),
+        score
+      );
+
+      setResultData(res);
       toast.success("Quiz completed!");
     } catch (error) {
-      toast.error(error.message || "Failed to save quiz results");
+      toast.error("Failed to save quiz results");
+    } finally {
+      setSavingResult(false);
     }
   };
 
@@ -80,15 +99,14 @@ export default function Quiz() {
     setCurrentQuestion(0);
     setAnswers([]);
     setShowExplanation(false);
-    generateQuizFn();
     setResultData(null);
+    generateQuizFn();
   };
 
   if (generatingQuiz) {
     return <BarLoader className="mt-4" width={"100%"} color="gray" />;
   }
 
-  // Show results if quiz is completed
   if (resultData) {
     return (
       <div className="mx-2">
@@ -118,7 +136,8 @@ export default function Quiz() {
     );
   }
 
-  const question = quizData[currentQuestion];
+  const question = quizData?.[currentQuestion];
+  if (!question) return null;
 
   return (
     <Card className="mx-2">
@@ -127,8 +146,10 @@ export default function Quiz() {
           Question {currentQuestion + 1} of {quizData.length}
         </CardTitle>
       </CardHeader>
+
       <CardContent className="space-y-4">
         <p className="text-lg font-medium">{question.question}</p>
+
         <RadioGroup
           onValueChange={handleAnswer}
           value={answers[currentQuestion]}
@@ -149,6 +170,7 @@ export default function Quiz() {
           </div>
         )}
       </CardContent>
+
       <CardFooter className="flex justify-between">
         {!showExplanation && (
           <Button
@@ -159,15 +181,15 @@ export default function Quiz() {
             Show Explanation
           </Button>
         )}
+
         <Button
           onClick={handleNext}
           disabled={!answers[currentQuestion] || savingResult}
           className="ml-auto"
         >
-          {savingResult && (
-            <BarLoader className="mt-4" width={"100%"} color="gray" />
-          )}
-          {currentQuestion < quizData.length - 1
+          {savingResult
+            ? "Saving..."
+            : currentQuestion < quizData.length - 1
             ? "Next Question"
             : "Finish Quiz"}
         </Button>

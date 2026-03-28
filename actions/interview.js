@@ -1,6 +1,6 @@
 "use server";
 
-import { checkUser } from "@/lib/checkUser"; // ✅ GLOBAL USE
+import { checkUser } from "@/lib/checkUser";
 import { db } from "@/lib/prisma";
 import OpenAI from "openai";
 
@@ -10,12 +10,16 @@ const openai = new OpenAI({
   baseURL: "https://openrouter.ai/api/v1",
 });
 
+// ✅ SAFE CONVERTER (better version)
+function toPlainObject(data) {
+  return JSON.parse(JSON.stringify(data ?? null));
+}
+
 // ================= GENERATE QUIZ =================
 
 export async function generateQuiz() {
-  // const user = await checkUser();
-
-  const prompt = `
+  try {
+    const prompt = `
 Generate exactly 10 technical MCQ questions for web development.
 
 Return ONLY valid JSON. No explanation, no markdown.
@@ -33,28 +37,30 @@ Format:
 }
 `;
 
-  try {
     const response = await openai.chat.completions.create({
       model: "meta-llama/llama-3-8b-instruct",
       messages: [{ role: "user", content: prompt }],
     });
 
-    let text = response.choices[0].message.content;
+    // ❗ ONLY extract string
+    let text = response?.choices?.[0]?.message?.content || "";
 
     if (!text) throw new Error("Empty response");
 
+    // remove markdown
     text = text.replace(/```json|```/g, "").trim();
 
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
 
     if (start === -1 || end === -1) {
-      throw new Error("No JSON found");
+      throw new Error("Invalid JSON format");
     }
 
-    const quiz = JSON.parse(text.substring(start, end + 1));
+    const parsed = JSON.parse(text.substring(start, end + 1));
 
-    return quiz.questions;
+    // ✅ RETURN ONLY SAFE ARRAY
+    return toPlainObject(parsed?.questions || []);
 
   } catch (error) {
     console.error("❌ Quiz Error:", error);
@@ -65,32 +71,37 @@ Format:
 // ================= SAVE RESULT =================
 
 export async function saveQuizResult(questions, answers, score) {
-  const user = await checkUser();
+  try {
+    const user = await checkUser();
 
-  const questionResults = questions.map((q, index) => ({
-    question: q.question,
-    answer: q.correctAnswer,
-    userAnswer: answers[index],
-    isCorrect: q.correctAnswer === answers[index],
-    explanation: q.explanation,
-  }));
+    // ✅ FORCE SAFE INPUT
+    const safeQuestions = toPlainObject(questions || []);
+    const safeAnswers = toPlainObject(answers || []);
 
-  const wrongAnswers = questionResults.filter((q) => !q.isCorrect);
+    const questionResults = safeQuestions.map((q, index) => ({
+      question: q?.question || "",
+      answer: q?.correctAnswer || "",
+      userAnswer: safeAnswers[index] || "",
+      isCorrect: q?.correctAnswer === safeAnswers[index],
+      explanation: q?.explanation || "",
+    }));
 
-  let improvementTip = null;
+    const wrongAnswers = questionResults.filter((q) => !q.isCorrect);
 
-  if (wrongAnswers.length > 0) {
-    const wrongQuestionsText = wrongAnswers
-      .map(
-        (q) =>
-          `Question: "${q.question}"
+    let improvementTip = null;
+
+    if (wrongAnswers.length > 0) {
+      const wrongQuestionsText = wrongAnswers
+        .map(
+          (q) =>
+            `Question: "${q.question}"
 Correct Answer: "${q.answer}"
 User Answer: "${q.userAnswer}"`
-      )
-      .join("\n\n");
+        )
+        .join("\n\n");
 
-    const improvementPrompt = `
-The user got these ${user.industry || "general"} questions wrong:
+      const improvementPrompt = `
+The user got these ${user?.industry || "general"} questions wrong:
 
 ${wrongQuestionsText}
 
@@ -98,20 +109,20 @@ Give a short improvement tip (max 2 sentences).
 Focus on what to learn.
 `;
 
-    try {
-      const response = await openai.chat.completions.create({
-        model: "meta-llama/llama-3-8b-instruct",
-        messages: [{ role: "user", content: improvementPrompt }],
-      });
+      try {
+        const response = await openai.chat.completions.create({
+          model: "meta-llama/llama-3-8b-instruct",
+          messages: [{ role: "user", content: improvementPrompt }],
+        });
 
-      improvementTip = response.choices[0].message.content?.trim();
-    } catch (error) {
-      console.error("Tip Error:", error);
+        improvementTip =
+          response?.choices?.[0]?.message?.content?.trim() || null;
+      } catch (error) {
+        console.error("Tip Error:", error);
+      }
     }
-  }
 
-  try {
-    return await db.assessment.create({
+    const result = await db.assessment.create({
       data: {
         userId: user.id,
         quizScore: score,
@@ -120,6 +131,10 @@ Focus on what to learn.
         improvementTip,
       },
     });
+
+    // ✅ FINAL FIX (IMPORTANT)
+    return toPlainObject(result);
+
   } catch (error) {
     console.error("DB Error:", error);
     throw new Error("Failed to save quiz result");
@@ -129,10 +144,19 @@ Focus on what to learn.
 // ================= GET RESULTS =================
 
 export async function getAssessments() {
-  const user = await checkUser();
+  try {
+    const user = await checkUser();
 
-  return await db.assessment.findMany({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-  });
+    const data = await db.assessment.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "asc" },
+    });
+
+    // ✅ SAFE RETURN
+    return toPlainObject(data);
+
+  } catch (error) {
+    console.error("Fetch Error:", error);
+    throw new Error("Failed to fetch assessments");
+  }
 }
